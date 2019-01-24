@@ -28,4 +28,7 @@ var (
 	// KeyForward is the default key to page down during selection.
 	KeyForward        rune = readline.CharForward
 	KeyForwardDisplay      = "→"
+
+	// KeySpace is the default key for submission/selection.
+	KeySpace rune = ' '
 )

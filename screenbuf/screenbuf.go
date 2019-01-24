@@ -97,6 +97,26 @@ func (s *ScreenBuf) Write(b []byte) (int, error) {
 	}
 }
 
+func (s *ScreenBuf) Clear() (int, error) {
+
+	if s.reset {
+		for i := 0; i < s.height; i++ {
+			_, err := s.buf.Write(moveUp)
+			if err != nil {
+				return 0, err
+			}
+			_, err = s.buf.Write(clearLine)
+			if err != nil {
+				return 0, err
+			}
+		}
+		s.cursor = 0
+		s.height = 0
+		s.reset = false
+	}
+	return 0, nil
+}
+
 // Flush writes any buffered data to the underlying io.Writer, ensuring that any pending data is displayed.
 func (s *ScreenBuf) Flush() error {
 	for i := s.cursor; i < s.height; i++ {

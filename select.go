@@ -8,15 +8,18 @@ import (
 	"text/template"
 
 	"github.com/chzyer/readline"
+	"github.com/isacikgoz/promptui/list"
+	"github.com/isacikgoz/promptui/screenbuf"
 	"github.com/juju/ansiterm"
-	"github.com/manifoldco/promptui/list"
-	"github.com/manifoldco/promptui/screenbuf"
 )
 
 // SelectedAdd is used internally inside SelectWithAdd when the add option is selected in select mode.
 // Since -1 is not a possible selected index, this ensure that add mode is always unique inside
 // SelectWithAdd's logic.
 const SelectedAdd = -1
+
+// CustomFunc is executed when a mapped key read from the input stream
+type CustomFunc func(in interface{}, chb chan bool, pos int) error
 
 // Select represents a list of items used to enable selections, they can be used as search engines, menus
 // or as a list of items in a cli based prompt.
@@ -73,6 +76,9 @@ type Select struct {
 
 	// A function that determines how to render the cursor
 	Pointer Pointer
+
+	// CustomFuncs is a map with key and functions
+	CustomFuncs map[rune]CustomFunc
 }
 
 // SelectKeys defines the available keys used by select mode to enable the user to move around the list
@@ -92,6 +98,9 @@ type SelectKeys struct {
 
 	// Search is the key used to trigger the search mode for the list. Default to the "/" key.
 	Search Key
+
+	// Spcae is the key used to trigger the select mode for the list. Default to the space key.
+	Space Key
 }
 
 // Key defines a keyboard code and a display representation for the help menu.
@@ -243,6 +252,30 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 
 	c.SetListener(func(line []rune, pos int, key rune) ([]rune, int, bool) {
 		switch {
+		// if the key is mapped into a custom function
+		case s.isCustom(key) && !searchMode:
+			// get function from the key
+			cf := s.getFunc(key)
+			// check if the function is nil
+			canCustom := cf != nil
+			if canCustom {
+				// get the index
+				_, idx := s.list.Items()
+				// create chanel to cleanup if custom func requires it e.g. redraw
+				b := make(chan bool)
+				// we should finally execute the custom function
+				defer cf(nil, b, idx)
+				// wait the cleanup async
+				go func() {
+					if <-b {
+						sb.Reset()
+						sb.Clear()
+						sb.Flush()
+						rl.Close()
+					}
+				}()
+				return nil, 0, true
+			}
 		case key == KeyEnter:
 			return nil, 0, true
 		case key == s.Keys.Next.Code || (key == 'j' && !searchMode):
@@ -376,15 +409,34 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 	items, idx := s.list.Items()
 	item := items[idx]
 
-	output := render(s.Templates.selected, item)
+	// output := render(s.Templates.selected, item)
 
 	sb.Reset()
-	sb.Write(output)
+	// sb.Write(output)
+	sb.Clear()
 	sb.Flush()
 	rl.Write([]byte(showCursor))
 	rl.Close()
 
 	return s.list.Index(), fmt.Sprintf("%v", item), err
+}
+
+func (s *Select) isCustom(key rune) bool {
+	for k, _ := range s.CustomFuncs {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Select) getFunc(key rune) CustomFunc {
+	for k, f := range s.CustomFuncs {
+		if k == key {
+			return f
+		}
+	}
+	return nil
 }
 
 // ScrollPosition returns the current scroll position.
@@ -563,6 +615,7 @@ func (s *Select) setKeys() {
 		PageUp:   Key{Code: KeyBackward, Display: KeyBackwardDisplay},
 		PageDown: Key{Code: KeyForward, Display: KeyForwardDisplay},
 		Search:   Key{Code: '/', Display: "/"},
+		Space:    Key{Code: KeySpace, Display: "space"},
 	}
 }
 
@@ -594,12 +647,14 @@ func (s *Select) renderHelp(b bool) []byte {
 		PageUpKey   string
 		Search      bool
 		SearchKey   string
+		SpaceKey    string
 	}{
 		NextKey:     s.Keys.Next.Display,
 		PrevKey:     s.Keys.Prev.Display,
 		PageDownKey: s.Keys.PageDown.Display,
 		PageUpKey:   s.Keys.PageUp.Display,
 		SearchKey:   s.Keys.Search.Display,
+		SpaceKey:    s.Keys.Space.Display,
 		Search:      b,
 	}
 
