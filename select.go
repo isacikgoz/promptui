@@ -264,7 +264,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 				// create chanel to cleanup if custom func requires it e.g. redraw
 				b := make(chan bool)
 				// we should finally execute the custom function
-				defer cf(nil, b, idx)
+				defer cf(rl, b, idx)
 				// wait the cleanup async
 				go func() {
 					if <-b {
@@ -274,7 +274,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 						rl.Close()
 					}
 				}()
-				return nil, 0, true
+				return []rune{'\033'}, 0, false
 			}
 		case key == KeyEnter:
 			return nil, 0, true
