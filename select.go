@@ -218,6 +218,17 @@ func (s *Select) RunCursorAt(cursorPos, scroll int) (int, string, error) {
 	return s.innerRun(cursorPos, scroll, ' ')
 }
 
+func (s *Select) RefreshList(i interface{}) {
+	s.Items = i
+	l, err := list.New(s.Items, s.Size)
+	if err != nil {
+		return
+	}
+	l.Searcher = s.Searcher
+
+	s.list = l
+}
+
 func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) {
 	stdin := readline.NewCancelableStdin(os.Stdin)
 	c := &readline.Config{}
@@ -264,13 +275,14 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 				// create chanel to cleanup if custom func requires it e.g. redraw
 				b := make(chan bool)
 				// we should finally execute the custom function
-				defer cf(rl, b, idx)
+				defer cf(sb, b, idx)
 				// wait the cleanup async
+				sb.Reset()
 				go func() {
 					if <-b {
-						sb.Reset()
 						sb.Clear()
 						sb.Flush()
+						rl.Write([]byte(showCursor))
 						rl.Close()
 					}
 				}()
@@ -399,7 +411,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			err = ErrInterrupt
 		}
 		sb.Reset()
-		sb.WriteString("")
+		// sb.WriteString("")
 		sb.Flush()
 		rl.Write([]byte(showCursor))
 		rl.Close()
@@ -422,7 +434,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 }
 
 func (s *Select) isCustom(key rune) bool {
-	for k, _ := range s.CustomFuncs {
+	for k := range s.CustomFuncs {
 		if k == key {
 			return true
 		}
