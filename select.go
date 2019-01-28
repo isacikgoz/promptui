@@ -79,6 +79,8 @@ type Select struct {
 
 	// CustomFuncs is a map with key and functions
 	CustomFuncs map[rune]CustomFunc
+
+	sb *screenbuf.ScreenBuf
 }
 
 // SelectKeys defines the available keys used by select mode to enable the user to move around the list
@@ -218,8 +220,8 @@ func (s *Select) RunCursorAt(cursorPos, scroll int) (int, string, error) {
 	return s.innerRun(cursorPos, scroll, ' ')
 }
 
-func (s *Select) RefreshList(i interface{}) {
-	s.Items = i
+func (s *Select) RefreshList(in interface{}, pos int) {
+	s.Items = in
 	l, err := list.New(s.Items, s.Size)
 	if err != nil {
 		return
@@ -227,6 +229,58 @@ func (s *Select) RefreshList(i interface{}) {
 	l.Searcher = s.Searcher
 
 	s.list = l
+	l.SetCursor(pos)
+	s.writeBuffer(' ')
+}
+
+func (s *Select) writeBuffer(top rune) error {
+	label := render(s.Templates.label, s.Label)
+	s.sb.Write(label)
+
+	items, idx := s.list.Items()
+	last := len(items) - 1
+
+	for i, item := range items {
+		page := " "
+
+		switch i {
+		case 0:
+			if s.list.CanPageUp() {
+				page = "↑"
+			} else {
+				page = string(top)
+			}
+		case last:
+			if s.list.CanPageDown() {
+				page = "↓"
+			}
+		}
+
+		output := []byte(page + " ")
+
+		if i == idx {
+			output = append(output, render(s.Templates.active, item)...)
+		} else {
+			output = append(output, render(s.Templates.inactive, item)...)
+		}
+
+		s.sb.Write(output)
+	}
+
+	if idx == list.NotFound {
+		s.sb.WriteString("")
+		s.sb.WriteString("No results")
+	} else {
+		active := items[idx]
+
+		details := s.renderDetails(active)
+		for _, d := range details {
+			s.sb.Write(d)
+		}
+	}
+
+	s.sb.Flush()
+	return nil
 }
 
 func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) {
@@ -252,7 +306,8 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 	}
 
 	rl.Write([]byte(hideCursor))
-	sb := screenbuf.New(rl)
+	s.sb = screenbuf.New(rl)
+	sb := s.sb
 
 	cur := NewCursor("", s.Pointer, false)
 
@@ -271,7 +326,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			canCustom := cf != nil
 			if canCustom {
 				// get the index
-				_, idx := s.list.Items()
+				idx := s.list.Index()
 				// create chanel to cleanup if custom func requires it e.g. redraw
 				b := make(chan bool)
 				// we should finally execute the custom function
@@ -336,52 +391,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			sb.Write(help)
 		}
 
-		label := render(s.Templates.label, s.Label)
-		sb.Write(label)
-
-		items, idx := s.list.Items()
-		last := len(items) - 1
-
-		for i, item := range items {
-			page := " "
-
-			switch i {
-			case 0:
-				if s.list.CanPageUp() {
-					page = "↑"
-				} else {
-					page = string(top)
-				}
-			case last:
-				if s.list.CanPageDown() {
-					page = "↓"
-				}
-			}
-
-			output := []byte(page + " ")
-
-			if i == idx {
-				output = append(output, render(s.Templates.active, item)...)
-			} else {
-				output = append(output, render(s.Templates.inactive, item)...)
-			}
-
-			sb.Write(output)
-		}
-
-		if idx == list.NotFound {
-			sb.WriteString("")
-			sb.WriteString("No results")
-		} else {
-			active := items[idx]
-
-			details := s.renderDetails(active)
-			for _, d := range details {
-				sb.Write(d)
-			}
-		}
-
-		sb.Flush()
+		s.writeBuffer(top)
 
 		return nil, 0, true
 	})
