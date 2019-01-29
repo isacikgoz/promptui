@@ -19,7 +19,7 @@ import (
 const SelectedAdd = -1
 
 // CustomFunc is executed when a mapped key read from the input stream
-type CustomFunc func(in interface{}, chb chan bool, pos int) error
+type CustomFunc func(in interface{}, chb chan bool, index int) error
 
 // Select represents a list of items used to enable selections, they can be used as search engines, menus
 // or as a list of items in a cli based prompt.
@@ -464,6 +464,11 @@ func (s *Select) getFunc(key rune) CustomFunc {
 // ScrollPosition returns the current scroll position.
 func (s *Select) ScrollPosition() int {
 	return s.list.Start()
+}
+
+// CursorPosition returns the current scroll position.
+func (s *Select) CursorPosition() int {
+	return s.list.Index()
 }
 
 func (s *Select) prepareTemplates() error {
