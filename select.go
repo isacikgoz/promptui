@@ -325,7 +325,8 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 	searchMode := s.StartInSearchMode
 	s.list.SetCursor(cursorPos)
 	s.list.SetStart(scroll)
-
+	// create chanel to cleanup if custom func requires it e.g. redraw
+	b := make(chan bool)
 	c.SetListener(func(line []rune, pos int, key rune) ([]rune, int, bool) {
 		switch {
 		// if the key is mapped into a custom function
@@ -337,8 +338,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			if canCustom {
 				// get the index
 				idx := s.list.Index()
-				// create chanel to cleanup if custom func requires it e.g. redraw
-				b := make(chan bool)
+
 				// we should finally execute the custom function
 				defer cf(sb, b, idx)
 				// wait the cleanup async
@@ -351,7 +351,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 						rl.Close()
 					}
 				}()
-				return []rune{'\033'}, 0, false
+				return nil, 0, false
 			}
 		case key == KeyEnter:
 			return nil, 0, true

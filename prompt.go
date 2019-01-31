@@ -211,28 +211,13 @@ func (p *Prompt) Run() (string, error) {
 			err = ErrInterrupt
 		}
 		sb.Reset()
-		sb.WriteString("")
 		sb.Flush()
 		rl.Write([]byte(showCursor))
 		rl.Close()
 		return "", err
 	}
 
-	echo := cur.Format()
-	if p.Mask != 0 {
-		echo = cur.FormatMask(p.Mask)
-	}
-
-	prompt := render(p.Templates.success, p.Label)
-	prompt = append(prompt, []byte(echo)...)
-
-	if p.IsConfirm {
-		lowerDefault := strings.ToLower(p.Default)
-		if strings.ToLower(cur.Get()) != "y" && (lowerDefault != "y" || (lowerDefault == "y" && cur.Get() != "")) {
-			prompt = render(p.Templates.invalid, p.Label)
-			err = ErrAbort
-		}
-	}
+	prompt := []byte("\033[1A")
 
 	sb.Reset()
 	sb.Write(prompt)
