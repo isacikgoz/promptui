@@ -169,6 +169,9 @@ type SelectTemplates struct {
 	// it shows keys for movement and search.
 	Help string
 
+	// Extra is additional information to tail help and it should not be a template
+	Extra string
+
 	// FuncMap is a map of helper functions that can be used inside of templates according to the text/template
 	// documentation.
 	//
@@ -220,6 +223,7 @@ func (s *Select) RunCursorAt(cursorPos, scroll int) (int, string, error) {
 	return s.innerRun(cursorPos, scroll, ' ')
 }
 
+// RefreshList updates the items on the fly and redraws the buffer
 func (s *Select) RefreshList(in interface{}, pos int) {
 	s.Items = in
 	l, err := list.New(s.Items, s.Size)
@@ -230,10 +234,16 @@ func (s *Select) RefreshList(in interface{}, pos int) {
 
 	s.list = l
 	l.SetCursor(pos)
-	s.writeBuffer(' ')
+	s.writeBuffer(!s.HideHelp, false, ' ')
 }
 
-func (s *Select) writeBuffer(top rune) error {
+func (s *Select) writeBuffer(showHelp, canSearch bool, top rune) error {
+
+	if showHelp {
+		help := s.renderHelp(canSearch)
+		s.sb.Write(help)
+	}
+
 	label := render(s.Templates.label, s.Label)
 	s.sb.Write(label)
 
@@ -386,12 +396,9 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 		if searchMode {
 			header := fmt.Sprintf("Search: %s", cur.Format())
 			sb.WriteString(header)
-		} else if !s.HideHelp {
-			help := s.renderHelp(canSearch)
-			sb.Write(help)
 		}
 
-		s.writeBuffer(top)
+		s.writeBuffer(!s.HideHelp, canSearch, top)
 
 		return nil, 0, true
 	})
@@ -534,8 +541,9 @@ func (s *Select) prepareTemplates() error {
 	}
 
 	if tpls.Help == "" {
-		tpls.Help = fmt.Sprintf(`{{ "Use the arrow keys to navigate:" | faint }} {{ .NextKey | faint }} ` +
+		tpls.Help = fmt.Sprintf(`{{ "Navigate:" | faint }} {{ .NextKey | faint }} ` +
 			`{{ .PrevKey | faint }} {{ .PageDownKey | faint }} {{ .PageUpKey | faint }} ` +
+			`{{ "` + tpls.Extra + `" | faint }} {{ "quit: q" | faint}}` +
 			`{{ if .Search }} {{ "and" | faint }} {{ .SearchKey | faint }} {{ "toggles search" | faint }}{{ end }}`)
 	}
 
@@ -674,14 +682,12 @@ func (s *Select) renderHelp(b bool) []byte {
 		PageUpKey   string
 		Search      bool
 		SearchKey   string
-		SpaceKey    string
 	}{
 		NextKey:     s.Keys.Next.Display,
 		PrevKey:     s.Keys.Prev.Display,
 		PageDownKey: s.Keys.PageDown.Display,
 		PageUpKey:   s.Keys.PageUp.Display,
 		SearchKey:   s.Keys.Search.Display,
-		SpaceKey:    s.Keys.Space.Display,
 		Search:      b,
 	}
 
