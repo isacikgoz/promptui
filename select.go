@@ -293,7 +293,22 @@ func (s *Select) writeBuffer(showHelp, canSearch bool, top rune) error {
 	return nil
 }
 
+type stderr struct{}
+
+func (s *stderr) Write(b []byte) (int, error) {
+	if len(b) == 1 && b[0] == 7 {
+		return 0, nil
+	}
+	return os.Stderr.Write(b)
+}
+
+func (s *stderr) Close() error {
+	return os.Stderr.Close()
+}
+
 func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) {
+	readline.Stdout = &stderr{}
+
 	stdin := readline.NewCancelableStdin(os.Stdin)
 	c := &readline.Config{}
 	err := c.Init()
