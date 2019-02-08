@@ -55,9 +55,10 @@ const (
 var ResetCode = fmt.Sprintf("%s%dm", esc, reset)
 
 const (
-	hideCursor = esc + "?25l"
-	showCursor = esc + "?25h"
-	clearLine  = esc + "2K"
+	hideCursor  = esc + "?25l"
+	showCursor  = esc + "?25h"
+	clearLine   = esc + "2K"
+	linewrapoff = "\x1b[?7h"
 )
 
 // FuncMap defines template helpers for the output. It can be extended as a regular map.

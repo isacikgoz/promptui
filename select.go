@@ -362,7 +362,9 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 					if <-b {
 						sb.Clear()
 						sb.Flush()
+						rl.Write([]byte(linewrapoff))
 						rl.Write([]byte(showCursor))
+						rl.Clean()
 						rl.Close()
 					}
 				}()
