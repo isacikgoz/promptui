@@ -570,7 +570,7 @@ func (s *Select) prepareTemplates() error {
 	}
 
 	if tpls.Help == "" {
-		tpls.Help = fmt.Sprintf(`{{ "Navigate:" | faint }} {{ .NextKey | faint }} ` +
+		tpls.Help = fmt.Sprintf(`{{ "Nav:" | faint }} {{ .NextKey | faint }} ` +
 			`{{ .PrevKey | faint }} {{ .PageDownKey | faint }} {{ .PageUpKey | faint }} ` +
 			`{{ "` + tpls.Extra + `" | faint }} {{ "quit: q" | faint}}` +
 			`{{ if .Search }} {{ "and" | faint }} {{ .SearchKey | faint }} {{ "toggles search" | faint }}{{ end }}`)
