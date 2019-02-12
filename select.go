@@ -70,6 +70,8 @@ type Select struct {
 	// For search mode to work, the Search property must be implemented.
 	StartInSearchMode bool
 
+	FinishInSearchMode bool
+
 	label string
 
 	list *list.List
@@ -81,6 +83,9 @@ type Select struct {
 	CustomFuncs map[rune]CustomFunc
 
 	sb *screenbuf.ScreenBuf
+
+	// PreSearch
+	PreSearchString string
 }
 
 // SelectKeys defines the available keys used by select mode to enable the user to move around the list
@@ -343,6 +348,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 	// create chanel to cleanup if custom func requires it e.g. redraw
 	b := make(chan bool)
 	c.SetListener(func(line []rune, pos int, key rune) ([]rune, int, bool) {
+		s.FinishInSearchMode = searchMode
 		switch {
 		// if the key is mapped into a custom function
 		case s.isCustom(key) && !searchMode:
@@ -404,6 +410,10 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 		case key == s.Keys.PageDown.Code || (key == 'l' && !searchMode):
 			s.list.PageDown()
 		default:
+			if s.StartInSearchMode {
+				line = []rune(s.PreSearchString)
+				s.StartInSearchMode = false
+			}
 			if canSearch && searchMode {
 				cur.Update(string(line))
 				s.list.Search(string(cur.Get()))
@@ -412,10 +422,12 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 
 		if searchMode {
 			header := fmt.Sprintf("Search: %s", cur.Format())
+			s.PreSearchString = string(cur.Get())
 			sb.WriteString(header)
 		}
 
 		s.writeBuffer(!s.HideHelp, canSearch, top)
+		s.FinishInSearchMode = searchMode
 
 		return nil, 0, true
 	})
