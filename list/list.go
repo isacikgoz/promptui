@@ -9,7 +9,7 @@ import (
 // Searcher is a base function signature that is used inside select when activating the search mode.
 // If defined, it is called on each items of the select and should return a boolean for whether or not
 // the item fits the searched term.
-type Searcher func(input string, index int) bool
+type Searcher func(scope []*interface{}, term string) []*interface{}
 
 // NotFound is an index returned when no item was selected. This could
 // happen due to a search without results.
@@ -80,15 +80,7 @@ func (l *List) CancelSearch() {
 }
 
 func (l *List) search(term string) {
-	var scope []*interface{}
-
-	for i, item := range l.items {
-		if l.Searcher(term, i) {
-			scope = append(scope, item)
-		}
-	}
-
-	l.scope = scope
+	l.scope = l.Searcher(l.items, term)
 }
 
 // Start returns the current render start position of the list.
