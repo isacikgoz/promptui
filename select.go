@@ -21,6 +21,12 @@ const SelectedAdd = -1
 // CustomFunc is executed when a mapped key read from the input stream
 type CustomFunc func(in interface{}, chb chan bool, index int) error
 
+// CustomKey is keybinding that will map to Custom Function
+type CustomKey struct {
+	Key    rune
+	Always bool
+}
+
 // Select represents a list of items used to enable selections, they can be used as search engines, menus
 // or as a list of items in a cli based prompt.
 type Select struct {
@@ -31,6 +37,7 @@ type Select struct {
 	// inside the templates. For example, `{{ .Name }}` will display the name property of a struct.
 	Label interface{}
 
+	SearchLabel string
 	// Items are the items to display inside the list. It expect a slice of any kind of values, including strings.
 	//
 	// If using a slice a strings, promptui will use those strings directly into its base templates or the
@@ -50,6 +57,12 @@ type Select struct {
 
 	// HideHelp sets whether to hide help information.
 	HideHelp bool
+
+	// HideLabel sets whether to hide label of the promt.
+	HideLabel bool
+
+	// HideScroll removes scroll arrows from the promt.
+	HideScroll bool
 
 	// Templates can be used to customize the select output. If nil is passed, the
 	// default templates are used. See the SelectTemplates docs for more info.
@@ -80,7 +93,7 @@ type Select struct {
 	Pointer Pointer
 
 	// CustomFuncs is a map with key and functions
-	CustomFuncs map[rune]CustomFunc
+	CustomFuncs map[CustomKey]CustomFunc
 
 	sb *screenbuf.ScreenBuf
 
@@ -249,29 +262,35 @@ func (s *Select) writeBuffer(showHelp, canSearch bool, top rune) error {
 		s.sb.Write(help)
 	}
 
-	label := render(s.Templates.label, s.Label)
-	s.sb.Write(label)
+	if !s.HideLabel {
+		label := render(s.Templates.label, s.Label)
+		s.sb.Write(label)
+	}
 
 	items, idx := s.list.Items()
 	last := len(items) - 1
 
 	for i, item := range items {
-		page := " "
-
-		switch i {
-		case 0:
-			if s.list.CanPageUp() {
-				page = "↑"
-			} else {
-				page = string(top)
-			}
-		case last:
-			if s.list.CanPageDown() {
-				page = "↓"
+		var page string
+		var spacer string
+		if !s.HideScroll {
+			page = " "
+			spacer = " "
+			switch i {
+			case 0:
+				if s.list.CanPageUp() {
+					page = "↑"
+				} else {
+					page = string(top)
+				}
+			case last:
+				if s.list.CanPageDown() {
+					page = "↓"
+				}
 			}
 		}
 
-		output := []byte(page + " ")
+		output := []byte(page + spacer)
 
 		if i == idx {
 			output = append(output, render(s.Templates.active, item)...)
@@ -351,7 +370,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 		s.FinishInSearchMode = searchMode
 		switch {
 		// if the key is mapped into a custom function
-		case s.isCustom(key) && !searchMode:
+		case s.isCustom(key) && (!searchMode || s.always(key)):
 			// get function from the key
 			cf := s.getFunc(key)
 			// check if the function is nil
@@ -421,7 +440,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 		}
 
 		if searchMode {
-			header := fmt.Sprintf("Search: %s", cur.Format())
+			header := fmt.Sprintf("%s%s", s.SearchLabel, cur.Format())
 			s.PreSearchString = string(cur.Get())
 			sb.WriteString(header)
 		}
@@ -457,7 +476,6 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			err = ErrInterrupt
 		}
 		sb.Reset()
-		// sb.WriteString("")
 		sb.Flush()
 		rl.Write([]byte(showCursor))
 		rl.Close()
@@ -467,10 +485,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 	items, idx := s.list.Items()
 	item := items[idx]
 
-	// output := render(s.Templates.selected, item)
-
 	sb.Reset()
-	// sb.Write(output)
 	sb.Clear()
 	sb.Flush()
 	rl.Write([]byte(showCursor))
@@ -481,7 +496,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 
 func (s *Select) isCustom(key rune) bool {
 	for k := range s.CustomFuncs {
-		if k == key {
+		if k.Key == key {
 			return true
 		}
 	}
@@ -490,11 +505,20 @@ func (s *Select) isCustom(key rune) bool {
 
 func (s *Select) getFunc(key rune) CustomFunc {
 	for k, f := range s.CustomFuncs {
-		if k == key {
+		if k.Key == key {
 			return f
 		}
 	}
 	return nil
+}
+
+func (s *Select) always(key rune) bool {
+	for k := range s.CustomFuncs {
+		if k.Key == key {
+			return k.Always
+		}
+	}
+	return false
 }
 
 // ScrollPosition returns the current scroll position.
