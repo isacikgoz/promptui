@@ -26,4 +26,7 @@ var (
 	// KeyForward is the default key to page down during selection inside a command line prompt.
 	KeyForward        rune = 39
 	KeyForwardDisplay      = "l"
+
+	// KeySpace is the default key for submission/selection.
+	KeySpace rune = ' '
 )
